@@ -9,18 +9,29 @@ import com.google.zxing.WriterException;
 import com.phono.srtplight.Log;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.math.BigDecimal;
 import java.net.URL;
 import java.util.ResourceBundle;
 import java.util.function.BiFunction;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.Group;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
+import javafx.scene.input.TouchEvent;
+import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
+import javax.json.Json;
+import javax.json.JsonObject;
 import pe.pi.client.small.App;
 import pe.pi.client.small.screen.Qart;
 import pe.pi.client.small.screen.SmallScreen;
@@ -34,9 +45,9 @@ import pe.pi.sctp4j.sctp.SCTPOutboundStreamOpenedListener;
  *
  * @author thp
  */
-public class LightSwitchController implements Initializable, SCTPStreamListener, SCTPOutboundStreamOpenedListener {
+public class LightSwitchController implements Initializable, SCTPStreamListener, SCTPOutboundStreamOpenedListener  {
 
-    private SCTPStream echo;
+    private SCTPStream pwm0;
 
     @FXML
     private Group qrgroup;
@@ -46,17 +57,34 @@ public class LightSwitchController implements Initializable, SCTPStreamListener,
     private Canvas qrcanvas;
     @FXML
     private Label label;
-    private int n;
-
     @FXML
-    private void handleButtonAction(ActionEvent event) {
-        System.out.println("You clicked me!");
-        label.setText("Hello world");
-    }
+    private Slider slider;
+    @FXML
+    private Pane slidePane;
+    
+    private int n;
+    char q = '"';
+
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         Log.setLevel(Log.DEBUG);
+        slider.valueProperty().addListener((ObservableValue<? extends Number> observable, Number oldValue, Number newValue) -> {
+            String nvs = String.format("%6.0f", newValue);
+            Log.debug("value is "+nvs);
+            char q = '"';
+            if (pwm0 != null){
+                String message = "{"+q+"command"+q+":"+q+"write"+q+","
+                        +q+"value"+q+":"+q+ nvs+q+"}";
+                try {
+                    pwm0.send(message);
+                    Log.debug("sending "+message);
+                } catch (Exception ex) {
+                    Log.error("Cant send to "+pwm0.toString());
+                }
+            }
+            label.setText(nvs);
+        });
         SmallScreen ss = new SmallScreen() {
             @Override
             public void init() throws UnsupportedOperationException {
@@ -108,10 +136,10 @@ public class LightSwitchController implements Initializable, SCTPStreamListener,
             public void onAssociated(Association asctn) {
                 Log.info("Associated");
                 try {
-                    echo = asctn.mkStream("echo");
-                    echo.setSCTPStreamListener(that);
+                    pwm0 = asctn.mkStream("pwm0");
+                    pwm0.setSCTPStreamListener(that);
                 } catch (Exception ex) {
-                    Log.error("can't open echo stream");
+                    Log.error("can't open pwm0 stream");
                 }
             }
 
@@ -198,7 +226,21 @@ public class LightSwitchController implements Initializable, SCTPStreamListener,
         switchgroup.setVisible(false);
         qrgroup.setVisible(false);
     }
-
+    public void addTouch(){
+    final EventHandler<TouchEvent> exitOnTouchEventHandler =
+                new EventHandler<TouchEvent>() {
+            @Override
+            public void handle(TouchEvent t) {
+                System.out.println(t.getTouchPoint().getScreenX());
+                System.out.println(t.getTouchPoint().getScreenY());
+                Platform.exit();
+                t.consume();
+            }
+        };
+ 
+        slidePane.setOnTouchPressed(exitOnTouchEventHandler);
+        slidePane.setOnTouchReleased(exitOnTouchEventHandler);
+    }
     @Override
     public void onMessage(SCTPStream stream, String string) {
         Log.debug("got message " + string);
@@ -217,16 +259,18 @@ public class LightSwitchController implements Initializable, SCTPStreamListener,
 
     @Override
     public void opened(SCTPStream stream) {
-        if (stream == echo) {
-            Log.debug("sending first words on echo");
+        if (stream == pwm0) {
+            showSwitch();
+            Log.debug("sending first words on pwm0");
             try {
-                echo.send("hello "+n);
+                pwm0.send("{"+q+"command"+q+":"+q+"write"+q+","
+                        +q+"value"+q+":"+q+ "0"+q+"}");
             } catch (Exception ex) {
-                Log.error("can't write to echo stream");
+                Log.error("can't write to pwm0 stream");
             }
         } else {
-            Log.error("eeek, not echo stream in opened.");
-            Log.error("stream ="+((stream!=null)?stream.toString():"null")+" vs "+((echo!=null)?echo.toString():null));
+            Log.error("eeek, not pwm0 stream in opened.");
+            Log.error("stream =" + ((stream != null) ? stream.toString() : "null") + " vs " + ((pwm0 != null) ? pwm0.toString() : null));
         }
     }
 

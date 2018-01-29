@@ -23,7 +23,7 @@ public class PipeRemoteFX extends Application {
     @Override
     public void start(Stage stage) throws Exception {
         Parameters para = this.getParameters();
-        friend = para.getNamed().getOrDefault("friend", "864090e90094dc25b7d8a965c9643ccb9b3bdca7456e56455cbf4692c14c7d60");
+        friend = para.getNamed().getOrDefault("friend", "cca8b24bacc2e09ca27f6bcc45ac7f65539df4f94772e75ac25a8df1fe56e0bb");
         Parent root = FXMLLoader.load(getClass().getResource("LightSwitch.fxml"));
 
         Scene scene = new Scene(root);
